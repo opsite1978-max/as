@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>美股成本計算機</title>
+    <title>美股成本與回本計算機</title>
     <style>
         :root {
             --primary-color: #0070f3;
+            --success-color: #10b981;
+            --warning-color: #f5a623;
             --bg-color: #f5f5f5;
             --card-bg: #ffffff;
             --text-color: #333;
@@ -27,17 +29,18 @@
         .container {
             background-color: var(--card-bg);
             padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
         }
 
         h1 {
             text-align: center;
             font-size: 1.5rem;
             margin-bottom: 1.5rem;
-            color: var(--primary-color);
+            color: var(--text-color);
+            font-weight: 700;
         }
 
         .input-group {
@@ -47,23 +50,24 @@
         label {
             display: block;
             margin-bottom: 0.5rem;
-            font-weight: 500;
+            font-weight: 600;
             font-size: 0.9rem;
+            color: #555;
         }
 
         input {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 8px;
             font-size: 1rem;
-            box-sizing: border-box; /* 確保 padding 不會撐大寬度 */
+            box-sizing: border-box;
+            transition: border-color 0.2s;
         }
 
         input:focus {
             outline: none;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
         }
 
         .divider {
@@ -82,25 +86,56 @@
         .result-row.total {
             font-weight: bold;
             font-size: 1.1rem;
-            color: var(--primary-color);
+            color: var(--text-color);
             margin-top: 10px;
+            border-top: 1px dashed #ddd;
+            padding-top: 10px;
         }
 
-        .hint {
-            font-size: 0.8rem;
-            color: #888;
-            margin-top: 1rem;
+        /* 智慧分析區塊 */
+        .ai-box {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+            border: 1px solid #bae6fd;
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin-top: 1.5rem;
             text-align: center;
+        }
+
+        .ai-title {
+            font-size: 0.85rem;
+            color: #0284c7;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .ai-price {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--success-color);
+            margin: 0.5rem 0;
+        }
+
+        .ai-desc {
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .highlight {
+            color: var(--warning-color);
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>🇺🇸 美股成本計算</h1>
+        <h1>🇺🇸 美股智慧試算</h1>
 
         <div class="input-group">
-            <label for="price">美股股價 (USD)</label>
+            <label for="price">買入股價 (USD)</label>
             <input type="number" id="price" placeholder="例如: 150.5" step="0.01">
         </div>
 
@@ -110,7 +145,7 @@
         </div>
 
         <div class="input-group">
-            <label for="feeRate">手續費率 (%)</label>
+            <label for="feeRate">雙向手續費率 (%)</label>
             <input type="number" id="feeRate" value="0.25" step="0.01">
         </div>
 
@@ -121,69 +156,94 @@
             <span id="principal">$0.00</span>
         </div>
         <div class="result-row">
-            <span>預估手續費</span>
-            <span id="feeAmount">$0.00</span>
+            <span>買入手續費</span>
+            <span id="buyFee">$0.00</span>
         </div>
         <div class="result-row total">
-            <span>總支出成本</span>
+            <span>買入總支出</span>
             <span id="totalCost">$0.00</span>
         </div>
-        <div class="result-row" style="color: #666; font-size: 0.85rem;">
-            <span>損益兩平價 (每股)</span>
-            <span id="breakEven">$0.00</span>
+
+        <div class="ai-box">
+            <div class="ai-title">🤖 真正回本賣出價</div>
+            <div class="ai-price" id="breakEvenPrice">$0.00</div>
+            <div class="ai-desc">
+                股價需上漲 <span id="percentNeed" class="highlight">0.00%</span><br>
+                以支付買賣雙方手續費
+            </div>
         </div>
-        
-        <p class="hint">註：此計算未包含交易所規費 (SEC Fee) 或最低手續費限制。</p>
     </div>
 
     <script>
-        // 獲取 DOM 元素
         const priceInput = document.getElementById('price');
         const sharesInput = document.getElementById('shares');
         const feeRateInput = document.getElementById('feeRate');
         
         const principalDisplay = document.getElementById('principal');
-        const feeAmountDisplay = document.getElementById('feeAmount');
+        const buyFeeDisplay = document.getElementById('buyFee');
         const totalCostDisplay = document.getElementById('totalCost');
-        const breakEvenDisplay = document.getElementById('breakEven');
+        
+        const breakEvenPriceDisplay = document.getElementById('breakEvenPrice');
+        const percentNeedDisplay = document.getElementById('percentNeed');
 
-        // 監聽輸入事件，數值改變時自動計算
-        [priceInput, sharesInput, feeRateInput].forEach(input => {
-            input.addEventListener('input', calculate);
-        });
+        const inputs = [priceInput, sharesInput, feeRateInput];
+        inputs.forEach(input => input.addEventListener('input', calculate));
 
         function calculate() {
-            // 轉為浮點數，若無輸入則視為 0
             const price = parseFloat(priceInput.value) || 0;
             const shares = parseFloat(sharesInput.value) || 0;
             const feeRate = parseFloat(feeRateInput.value) || 0;
+            
+            // 費率轉小數 (0.25% -> 0.0025)
+            const rateDecimal = feeRate / 100;
 
-            // 1. 計算股票本金
+            // 1. 買入計算
             const principal = price * shares;
+            const buyFee = principal * rateDecimal;
+            const totalBuyCost = principal + buyFee;
 
-            // 2. 計算手續費 (本金 * 費率百分比)
-            // 0.25% 意味著 0.0025，所以要除以 100
-            const fee = principal * (feeRate / 100);
+            // 2. 智慧回本計算 (含賣出費)
+            // 公式邏輯：賣出總拿回金額 = 賣出總價 * (1 - 手續費率)
+            // 我們希望：賣出總拿回金額 = 買入總支出
+            // 所以：賣出總價 * (1 - rate) = totalBuyCost
+            // 賣出總價 = totalBuyCost / (1 - rate)
+            // 兩平單價 = 賣出總價 / 股數
+            
+            let breakEvenTotal = 0;
+            let breakEvenPrice = 0;
+            let percentChange = 0;
 
-            // 3. 總成本
-            const total = principal + fee;
+            if (shares > 0 && (1 - rateDecimal) > 0) {
+                breakEvenTotal = totalBuyCost / (1 - rateDecimal);
+                breakEvenPrice = breakEvenTotal / shares;
+                
+                if (price > 0) {
+                    percentChange = ((breakEvenPrice - price) / price) * 100;
+                }
+            }
 
-            // 4. 損益兩平價 (每股成本)
-            const breakEven = shares > 0 ? (total / shares) : 0;
-
-            // 更新畫面 (格式化為美元貨幣格式)
-            const formatter = new Intl.NumberFormat('en-US', {
+            // 3. 格式化顯示
+            const currencyFmt = new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: 'USD',
-                minimumFractionDigits: 2
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
             });
 
-            principalDisplay.textContent = formatter.format(principal);
-            feeAmountDisplay.textContent = formatter.format(fee);
-            totalCostDisplay.textContent = formatter.format(total);
-            
-            // 損益兩平價顯示更多小數點，精準一點
-            breakEvenDisplay.textContent = `$${breakEven.toFixed(3)}`;
+            // 針對單價顯示多一點小數點，比較精準
+            const priceFmt = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3
+            });
+
+            principalDisplay.textContent = currencyFmt.format(principal);
+            buyFeeDisplay.textContent = currencyFmt.format(buyFee);
+            totalCostDisplay.textContent = currencyFmt.format(totalBuyCost);
+
+            breakEvenPriceDisplay.textContent = priceFmt.format(breakEvenPrice);
+            percentNeedDisplay.textContent = percentChange.toFixed(3) + '%';
         }
     </script>
 </body>
