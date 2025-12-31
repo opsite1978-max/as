@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>美股成本計算機</title>
+    <style>
+        :root {
+            --primary-color: #0070f3;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+        }
+
+        .input-group {
+            margin-bottom: 1.2rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box; /* 確保 padding 不會撐大寬度 */
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
+        }
+
+        .divider {
+            height: 1px;
+            background-color: #eee;
+            margin: 1.5rem 0;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+            font-size: 0.95rem;
+        }
+
+        .result-row.total {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            margin-top: 10px;
+        }
+
+        .hint {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🇺🇸 美股成本計算</h1>
+
+        <div class="input-group">
+            <label for="price">美股股價 (USD)</label>
+            <input type="number" id="price" placeholder="例如: 150.5" step="0.01">
+        </div>
+
+        <div class="input-group">
+            <label for="shares">股數</label>
+            <input type="number" id="shares" placeholder="例如: 10" step="1">
+        </div>
+
+        <div class="input-group">
+            <label for="feeRate">手續費率 (%)</label>
+            <input type="number" id="feeRate" value="0.25" step="0.01">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="result-row">
+            <span>股票市值</span>
+            <span id="principal">$0.00</span>
+        </div>
+        <div class="result-row">
+            <span>預估手續費</span>
+            <span id="feeAmount">$0.00</span>
+        </div>
+        <div class="result-row total">
+            <span>總支出成本</span>
+            <span id="totalCost">$0.00</span>
+        </div>
+        <div class="result-row" style="color: #666; font-size: 0.85rem;">
+            <span>損益兩平價 (每股)</span>
+            <span id="breakEven">$0.00</span>
+        </div>
+        
+        <p class="hint">註：此計算未包含交易所規費 (SEC Fee) 或最低手續費限制。</p>
+    </div>
+
+    <script>
+        // 獲取 DOM 元素
+        const priceInput = document.getElementById('price');
+        const sharesInput = document.getElementById('shares');
+        const feeRateInput = document.getElementById('feeRate');
+        
+        const principalDisplay = document.getElementById('principal');
+        const feeAmountDisplay = document.getElementById('feeAmount');
+        const totalCostDisplay = document.getElementById('totalCost');
+        const breakEvenDisplay = document.getElementById('breakEven');
+
+        // 監聽輸入事件，數值改變時自動計算
+        [priceInput, sharesInput, feeRateInput].forEach(input => {
+            input.addEventListener('input', calculate);
+        });
+
+        function calculate() {
+            // 轉為浮點數，若無輸入則視為 0
+            const price = parseFloat(priceInput.value) || 0;
+            const shares = parseFloat(sharesInput.value) || 0;
+            const feeRate = parseFloat(feeRateInput.value) || 0;
+
+            // 1. 計算股票本金
+            const principal = price * shares;
+
+            // 2. 計算手續費 (本金 * 費率百分比)
+            // 0.25% 意味著 0.0025，所以要除以 100
+            const fee = principal * (feeRate / 100);
+
+            // 3. 總成本
+            const total = principal + fee;
+
+            // 4. 損益兩平價 (每股成本)
+            const breakEven = shares > 0 ? (total / shares) : 0;
+
+            // 更新畫面 (格式化為美元貨幣格式)
+            const formatter = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2
+            });
+
+            principalDisplay.textContent = formatter.format(principal);
+            feeAmountDisplay.textContent = formatter.format(fee);
+            totalCostDisplay.textContent = formatter.format(total);
+            
+            // 損益兩平價顯示更多小數點，精準一點
+            breakEvenDisplay.textContent = `$${breakEven.toFixed(3)}`;
+        }
+    </script>
+</body>
+</html>
